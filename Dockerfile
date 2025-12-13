@@ -1,45 +1,45 @@
-# Multi-stage build for optimized image size
+# =========================
+# Builder stage
+# =========================
 FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy only package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Install dependencies (clean)
+RUN npm ci && npm cache clean --force
 
-# Copy application code
+# Copy source code (node_modules excluded via .dockerignore)
 COPY . .
 
-# Build step (if you have a build command)
+# Build (uncomment if needed)
 # RUN npm run build
 
+
+# =========================
 # Production stage
+# =========================
 FROM node:20-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Create non-root user for security
+# Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copy dependencies and built app from builder
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app .
+# Copy ONLY what is needed
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server.js ./server.js
+# OR if built output exists:
+# COPY --from=builder /app/dist ./dist
 
-# Switch to non-root user
 USER nodejs
 
-# Expose port (change if your app uses different port)
 EXPOSE 5000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:5000/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"
 
-# Start the application
 CMD ["node", "server.js"]
