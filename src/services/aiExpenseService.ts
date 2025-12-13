@@ -1,10 +1,10 @@
 // File: src/services/aiExpenseService.ts
-import Anthropic from "@anthropic-ai/sdk";
+
 import { detectLanguage } from "./transalationService";
 
 // ============================================
 // AI CHAT EXPENSE SERVICE
-// Uses Claude API to parse natural language expenses
+// Uses pattern matching to parse natural language expenses
 // ============================================
 
 interface ExpenseData {
@@ -17,7 +17,7 @@ interface ExpenseData {
 }
 
 /**
- * Parse natural language text into expense data using AI
+ * Parse natural language text into expense data using pattern matching
  * Examples:
  * - "I spent 200 rupees on groceries"
  * - "500 രൂപ ഭക്ഷണത്തിന്"
@@ -26,71 +26,60 @@ interface ExpenseData {
 export const parseExpenseWithAI = async (
   text: string
 ): Promise<ExpenseData> => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY not found in environment variables");
-  }
-
-  console.log("🤖 Sending to Claude AI:", text);
-
-  const anthropic = new Anthropic({ apiKey });
+  console.log("🔍 Parsing expense:", text);
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [
-        {
-          role: "user",
-          content: `Parse this expense entry and return ONLY a JSON object with these fields:
-- amount (number)
-- category (string: Food, Transport, Shopping, Entertainment, Health, Bills, or Other)
-- description (string)
-- confidence (number 0-100)
+    // Extract amount (supports various formats)
+    const amountMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:rupees?|₹|rs\.?|രൂപ)?/i);
+    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
 
-Text: "${text}"
+    // Category keywords mapping
+    const categoryKeywords: Record<string, string[]> = {
+      Food: ['food', 'groceries', 'restaurant', 'dinner', 'lunch', 'breakfast', 'ഭക്ഷണ', 'grocery'],
+      Transport: ['transport', 'taxi', 'bus', 'uber', 'petrol', 'fuel', 'യാത്ര'],
+      Shopping: ['shopping', 'dress', 'clothes', 'shirt', 'shoes', 'bought', 'ഷോപ്പിംഗ്'],
+      Entertainment: ['movie', 'entertainment', 'game', 'fun', 'സിനിമ'],
+      Health: ['medicine', 'doctor', 'hospital', 'pharmacy', 'ആരോഗ്യ'],
+      Bills: ['bill', 'electricity', 'water', 'internet', 'rent', 'ബിൽ'],
+    };
 
-Return ONLY the JSON, no explanation.`
-        }
-      ]
-    });
+    // Detect category
+    let category = 'Other';
+    let maxMatches = 0;
+    const lowerText = text.toLowerCase();
 
-    const responseText = message.content[0].type === "text" 
-      ? message.content[0].text 
-      : "";
-    
-    // Parse the JSON response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in AI response");
+    for (const [cat, keywords] of Object.entries(categoryKeywords)) {
+      const matches = keywords.filter(keyword => lowerText.includes(keyword.toLowerCase())).length;
+      if (matches > maxMatches) {
+        maxMatches = matches;
+        category = cat;
+      }
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    
-    const confidence = parsed.confidence || 50;
-    
+    // Calculate confidence based on what we found
+    let confidence = 50;
+    if (amount > 0) confidence += 30;
+    if (maxMatches > 0) confidence += 20;
+
     return {
-      amount: parsed.amount || 0,
-      category: parsed.category || "Other",
-      description: parsed.description || text,
+      amount: amount || 0,
+      category: category,
+      description: text.trim(),
       confidence: confidence,
-      needsClarification: confidence < 70,
+      needsClarification: confidence < 70 || amount === 0,
       clarificationQuestion: confidence < 70 
-        ? "I'm not fully confident about this expense. Is this correct?" 
+        ? "Could you provide more details about the amount and category?" 
         : undefined
     };
 
   } catch (error: any) {
-    // Log the error but DON'T fall back to NLP here
-    // Let the unified parser handle fallback logic
-    console.error("❌ AI parsing error:", error.status, JSON.stringify(error));
-    throw error; // Re-throw to let caller handle it
+    console.error("❌ Parsing error:", error);
+    throw error;
   }
 };
 
 /**
- * Generate a friendly AI response in the user's language
+ * Generate a friendly response message
  */
 export const generateAIResponse = async (
   expenseData: ExpenseData,
@@ -98,50 +87,23 @@ export const generateAIResponse = async (
   userMessage?: string
 ): Promise<string> => {
   try {
-    const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-
-    if (!ANTHROPIC_API_KEY) {
-      return `Added ₹${expenseData.amount} to ${expenseData.category}. Family total: ₹${familyTotal}`;
-    }
-
-    const anthropic = new Anthropic({
-      apiKey: ANTHROPIC_API_KEY,
-    });
-
     // Detect language from user's message if provided
-    let languageInstruction = "";
+    let isEnglish = true;
     if (userMessage) {
       const detectedLanguage = await detectLanguage(userMessage);
-      if (detectedLanguage && detectedLanguage !== "en") {
-        languageInstruction = `\n\nIMPORTANT: Respond in the same language as the user's original message: "${userMessage}"`;
-      }
+      isEnglish = !detectedLanguage || detectedLanguage === "en";
     }
 
-    const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 200,
-      messages: [
-        {
-          role: "user",
-          content: `Generate a brief, friendly confirmation message for this expense:
-Amount: ₹${expenseData.amount}
-Category: ${expenseData.category}
-Family Total: ₹${familyTotal}
-
-Keep it short (1-2 sentences), friendly, and encouraging about tracking expenses.${languageInstruction}`,
-        },
-      ],
-    });
-
-    const content = response.content[0];
-    if (content.type === "text") {
-      return content.text;
+    // Generate response based on language
+    if (isEnglish) {
+      return `Great! Added ₹${expenseData.amount} to ${expenseData.category}. Your family total is now ₹${familyTotal}. Keep tracking! 💰`;
+    } else {
+      // Malayalam response
+      return `മികച്ചത്! ₹${expenseData.amount} ${expenseData.category} ൽ ചേർത്തു. നിങ്ങളുടെ കുടുംബ ആകെ ₹${familyTotal} ആണ്. 💰`;
     }
-
-    return `Added ₹${expenseData.amount} to ${expenseData.category}. Family total: ₹${familyTotal}`;
 
   } catch (error) {
-    console.error("❌ Error generating AI response:", error);
+    console.error("❌ Error generating response:", error);
     return `Added ₹${expenseData.amount} to ${expenseData.category}. Family total: ₹${familyTotal}`;
   }
-};
+}
