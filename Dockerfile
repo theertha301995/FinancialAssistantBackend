@@ -1,45 +1,44 @@
-# =========================
+# ======================
 # Builder stage
-# =========================
+# ======================
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy only package files
-COPY package*.json ./
+# Copy package files first (better caching)
+COPY package.json package-lock.json ./
 
-# Install dependencies (clean)
-RUN npm ci && npm cache clean --force
+# Install ALL dependencies (needed for TS build)
+RUN npm ci
 
-# Copy source code (node_modules excluded via .dockerignore)
+# Copy source code
 COPY . .
 
-# Build (uncomment if needed)
-# RUN npm run build
+# Build TypeScript → dist/
+RUN npm run build
 
 
-# =========================
+# ======================
 # Production stage
-# =========================
+# ======================
 FROM node:20-alpine
 
 WORKDIR /app
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
 
-# Copy ONLY what is needed
+# Copy only what is needed
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/server.js ./server.js
-# OR if built output exists:
-# COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist ./dist
 
+# Switch user
 USER nodejs
 
+# Expose app port
 EXPOSE 5000
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:5000/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"
-
-CMD ["node", "server.js"]
+# Start the app
+CMD ["node", "dist/server.js"]
