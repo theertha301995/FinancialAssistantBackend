@@ -5,13 +5,13 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first (better caching)
+# Copy package files first
 COPY package.json package-lock.json ./
 
-# Install ALL dependencies (needed for TS build)
+# Install ALL deps for build
 RUN npm ci
 
-# Copy source code
+# Copy source
 COPY . .
 
 # Build TypeScript → dist/
@@ -28,17 +28,20 @@ WORKDIR /app
 # Create non-root user
 RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
 
-# Copy only what is needed
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json ./
-COPY --from=builder /app/node_modules ./node_modules
+# Copy only runtime files
+COPY package.json package-lock.json ./
+
+# Install ONLY production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy compiled output only
 COPY --from=builder /app/dist ./dist
 
-# Switch user
+# Use non-root user
 USER nodejs
 
-# Expose app port
+# Expose port
 EXPOSE 5000
 
-# Start the app
+# Start app
 CMD ["node", "dist/server.js"]
