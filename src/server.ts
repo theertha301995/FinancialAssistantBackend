@@ -28,7 +28,14 @@ console.log("=".repeat(60) + "\n");
 // MIDDLEWARE
 // ============================================
 console.log("⚙️  Setting up middleware...");
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://finanncial-tracker-frontend-3gs289xic.vercel.app',
+    'http://localhost:5000', // for local development
+    
+  ],
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(requestLogger);
