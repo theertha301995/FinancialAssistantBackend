@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = async () => {
+    console.log('\n🚀 Starting test suite...\n');
+    // Set test environment variables
+    process.env.NODE_ENV = 'test';
+    process.env.JWT_SECRET = 'test-jwt-secret';
+    process.env.LOG_LEVEL = 'error';
+    // Any other global setup logic
+};
+//# sourceMappingURL=globalSetup.js.map
