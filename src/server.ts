@@ -31,7 +31,7 @@ console.log("⚙️  Setting up middleware...");
 app.use(cors({
   origin: [
     'https://finanncial-tracker-frontend-3gs289xic.vercel.app',
-    'http://localhost:5000', // for local development
+    'http://localhost:3000', // for local development
     
   ],
   credentials: true
