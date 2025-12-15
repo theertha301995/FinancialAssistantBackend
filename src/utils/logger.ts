@@ -3,10 +3,22 @@ import { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
 
-// Ensure logs directory exists
-const logsDir = path.join(__dirname, "..", "logs");
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+// Use /tmp for logs in Docker (always writable)
+const logsDir = process.env.LOG_DIR || '/tmp/logs';
+
+// Try to create logs directory, but don't crash if it fails
+let fileLoggingEnabled = false;
+try {
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  // Test if we can write to it
+  fs.accessSync(logsDir, fs.constants.W_OK);
+  fileLoggingEnabled = true;
+  console.log(`✅ File logging enabled: ${logsDir}`);
+} catch (error) {
+  console.warn('⚠️  Cannot create logs directory, using console-only logging');
+  fileLoggingEnabled = false;
 }
 
 // Custom format for better readability
@@ -21,25 +33,21 @@ const customFormat = format.printf(({ level, message, timestamp, service, ...met
   return msg;
 });
 
-const logger = createLogger({
-  level: process.env.LOG_LEVEL || "info", // Make it configurable via env
-  format: format.combine(
-    format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-    format.errors({ stack: true }),
-    format.splat(),
-    format.json()
-  ),
-  defaultMeta: { service: "daily-spending-app" },
-  transports: [
-    // Console transport with colors
-    new transports.Console({
-      format: format.combine(
-        format.colorize(),
-        format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-        customFormat
-      ),
-    }),
-    
+// Build transports array based on what's available
+const logTransports: any[] = [
+  // Always include console transport
+  new transports.Console({
+    format: format.combine(
+      format.colorize(),
+      format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+      customFormat
+    ),
+  }),
+];
+
+// Only add file transports if we can write to the filesystem
+if (fileLoggingEnabled) {
+  logTransports.push(
     // Error logs only
     new transports.File({ 
       filename: path.join(logsDir, "error.log"), 
@@ -47,23 +55,38 @@ const logger = createLogger({
       maxsize: 5242880, // 5MB
       maxFiles: 5,
     }),
-    
     // All logs
     new transports.File({ 
       filename: path.join(logsDir, "combined.log"),
       maxsize: 5242880, // 5MB
       maxFiles: 5,
-    }),
-  ],
-  
-  // Handle uncaught exceptions and rejections
-  exceptionHandlers: [
+    })
+  );
+}
+
+const loggerConfig: any = {
+  level: process.env.LOG_LEVEL || "info",
+  format: format.combine(
+    format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+    format.errors({ stack: true }),
+    format.splat(),
+    format.json()
+  ),
+  defaultMeta: { service: "daily-spending-app" },
+  transports: logTransports,
+};
+
+// Only add file-based exception/rejection handlers if file logging is enabled
+if (fileLoggingEnabled) {
+  loggerConfig.exceptionHandlers = [
     new transports.File({ filename: path.join(logsDir, "exceptions.log") }),
-  ],
-  rejectionHandlers: [
+  ];
+  loggerConfig.rejectionHandlers = [
     new transports.File({ filename: path.join(logsDir, "rejections.log") }),
-  ],
-});
+  ];
+}
+
+const logger = createLogger(loggerConfig);
 
 // If not in production, log to console with more detail
 if (process.env.NODE_ENV !== "production") {
