@@ -29,28 +29,15 @@ console.log("=".repeat(60) + "\n");
 // ============================================
 console.log("⚙️  Setting up middleware...");
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-
-    // Allow all Vercel deployments for this project
-    if (
-      origin.endsWith('.vercel.app') ||
-      origin === 'http://localhost:3000'
-    ) {
-      return callback(null, true);
-    }
-
-    console.error('❌ Blocked by CORS:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: [
+   'finanncial-tracker-frontend-theerthas-projects-66a7dc70.vercel.app',
+   'finanncial-tracker-front-git-3e617b-theerthas-projects-66a7dc70.vercel.app',
+   'finanncial-tracker-frontend-1n7yc9gvp.vercel.app',
+    'http://localhost:3000', // for local development
+    
+  ],
+  credentials: true
 }));
-
-app.options('*', cors());
-
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(requestLogger);
