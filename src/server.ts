@@ -30,9 +30,9 @@ console.log("=".repeat(60) + "\n");
 console.log("⚙️  Setting up middleware...");
 app.use(cors({
   origin: [
-   'finanncial-tracker-frontend-theerthas-projects-66a7dc70.vercel.app',
-   'finanncial-tracker-front-git-3e617b-theerthas-projects-66a7dc70.vercel.app',
-   'finanncial-tracker-frontend-1n7yc9gvp.vercel.app',
+    'https://finanncial-tracker-frontend-theerthas-projects-66a7dc70.vercel.app',
+    'https://finanncial-tracker-front-git-3e617b-theerthas-projects-66a7dc70.vercel.app',
+    'https://finanncial-tracker-frontend-1n7yc9gvp.vercel.app',
     'http://localhost:3000', // for local development
     
   ],
