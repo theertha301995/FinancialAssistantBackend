@@ -33,6 +33,7 @@ app.use(cors({
     'https://finanncial-tracker-frontend-theerthas-projects-66a7dc70.vercel.app',
     'https://finanncial-tracker-front-git-3e617b-theerthas-projects-66a7dc70.vercel.app',
     'https://finanncial-tracker-frontend-1n7yc9gvp.vercel.app',
+    'https://brave-sand-01e5e4210.2.azurestaticapps.net',
     'http://localhost:3000', // for local development
     
   ],
