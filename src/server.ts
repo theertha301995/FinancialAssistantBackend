@@ -4,6 +4,7 @@ console.log("🔥🔥🔥 SERVER.TS IS LOADING - FILE PATH:", __filename);
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import { query } from 'winston';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -101,6 +102,7 @@ try {
   const budgetRoutes = require('./routes/budgetRoutes').default;
   const notificationRoutes = require('./routes/notificationRoutes').default;
   const aiChatRoutes = require('./routes/aiChatRoutes').default;
+  const chatRoutes= require('./routes/chat.routes').default;
   
   console.log("✅ Routes imported");
 
@@ -126,6 +128,7 @@ try {
         budgets: '/api/budgets',
         notifications: '/api/notifications',
         chat: '/api/chat'
+      
       }
     });
   });
@@ -152,6 +155,9 @@ try {
 
   app.use('/api/chat', aiChatRoutes);
   console.log("   ✓ /api/chat");
+
+  app.use('/api',chatRoutes);
+   console.log("   ✓ /api/chat");
 
   console.log("\n✅ All routes mounted successfully!\n");
 

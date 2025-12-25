@@ -14,36 +14,72 @@ const jwtUtils_1 = require("../utils/jwtUtils");
  */
 const signup = async (req, res) => {
     try {
+        console.log('🔥 === SIGNUP REQUEST ===');
+        console.log('Body:', JSON.stringify(req.body, null, 2));
         const { name, email, password } = req.body;
+        // Validate input
+        if (!name || !email || !password) {
+            console.log('❌ Missing fields:', { name: !!name, email: !!email, password: !!password });
+            res.status(400).json({
+                message: 'Please provide name, email, and password'
+            });
+            return;
+        }
+        console.log('✅ Validation passed');
         // Check if user exists
+        console.log('🔍 Checking for existing user...');
         const userExists = await user_1.default.findOne({ email });
         if (userExists) {
+            console.log('❌ User already exists:', email);
             res.status(400).json({ message: 'User already exists' });
             return;
         }
+        console.log('✅ User does not exist');
         // Hash password
+        console.log('🔐 Hashing password...');
         const salt = await bcryptjs_1.default.genSalt(10);
         const hashedPassword = await bcryptjs_1.default.hash(password, salt);
-        // Create user without family
+        console.log('✅ Password hashed');
+        // Create user
+        console.log('💾 Creating user...');
         const user = await user_1.default.create({
             name,
             email,
             password: hashedPassword,
             role: 'member',
         });
+        console.log('✅ User created:', user._id);
         // Generate token
+        console.log('🎫 Generating token...');
         const token = (0, jwtUtils_1.generateToken)(user._id.toString());
-        // Send response - NO family field
+        console.log('✅ Token generated');
+        // Send response
         res.status(201).json({
             _id: user._id,
             name: user.name,
             email: user.email,
             token,
         });
+        console.log('✅ Response sent successfully');
     }
     catch (error) {
-        console.error('Signup error:', error);
-        res.status(500).json({ message: 'Error registering user', error });
+        console.error('💥 === SIGNUP ERROR ===');
+        console.error('Error type:', error.constructor.name);
+        console.error('Error message:', error.message);
+        console.error('Error code:', error.code);
+        console.error('Error stack:', error.stack);
+        // MongoDB specific errors
+        if (error.name === 'ValidationError') {
+            console.error('Validation errors:', JSON.stringify(error.errors, null, 2));
+        }
+        if (error.code === 11000) {
+            console.error('Duplicate key:', error.keyPattern);
+        }
+        res.status(500).json({
+            message: 'Error registering user',
+            error: error.message, // Changed from error: {}
+            errorType: error.name
+        });
     }
 };
 exports.signup = signup;
