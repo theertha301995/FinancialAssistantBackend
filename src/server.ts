@@ -17,7 +17,6 @@ import { requestLogger } from './utils/logger';
 
 const app = express();
 
-// ✅ IMPORTANT: Render provides PORT via env
 const PORT = Number(process.env.PORT) || 5000;
 
 console.log("\n" + "=".repeat(60));
@@ -25,27 +24,54 @@ console.log("🚀 Starting Daily Spending API...");
 console.log("=".repeat(60) + "\n");
 
 // ============================================
-// MIDDLEWARE
+// MIDDLEWARE - CORS FIRST! 🔥
 // ============================================
 console.log("⚙️  Setting up middleware...");
-app.use(cors({
-  origin: [
-    'https://finanncial-tracker-frontend-theerthas-projects-66a7dc70.vercel.app',
-    'https://finanncial-tracker-front-git-3e617b-theerthas-projects-66a7dc70.vercel.app',
-    'https://finanncial-tracker-frontend-1n7yc9gvp.vercel.app',
-    'https://brave-sand-01e5e4210.2.azurestaticapps.net',
-    'http://localhost:3000', // for local development
+
+// 🔥 IMPROVED CORS CONFIGURATION
+const corsOptions = {
+  origin: function(origin: string | undefined, callback: Function) {
+    const allowedOrigins = [
+      'https://finanncial-tracker-frontend-theerthas-projects-66a7dc70.vercel.app',
+      'https://finanncial-tracker-front-git-3e617b-theerthas-projects-66a7dc70.vercel.app',
+      'https://finanncial-tracker-frontend-1n7yc9gvp.vercel.app',
+      'https://brave-sand-01e5e4210.2.azurestaticapps.net',
+      'http://localhost:3000',
+    ];
     
-  ],
-  credentials: true
-}));
+    // Allow requests with no origin (Postman, mobile apps, curl)
+    if (!origin) {
+      console.log('✅ Request with no origin (Postman/curl) - allowed');
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('✅ CORS allowed for origin:', origin);
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked for origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Length', 'X-Requested-With'],
+  maxAge: 86400 // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// 🔥 CRITICAL: Handle preflight OPTIONS requests
+app.options('*', cors(corsOptions));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(requestLogger);
 
-// Extra request logging (safe to keep)
+// 🔥 Enhanced request logging
 app.use((req, _res, next) => {
-  console.log(`📨 ${req.method} ${req.path}`);
+  console.log(`📨 ${req.method} ${req.path} from ${req.get('origin') || 'no origin'}`);
   next();
 });
 
@@ -132,7 +158,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // ============================================
-// START SERVER (🔥 FIXED FOR RENDER)
+// START SERVER
 // ============================================
 app.listen(PORT, '0.0.0.0', () => {
   console.log("=".repeat(60));
