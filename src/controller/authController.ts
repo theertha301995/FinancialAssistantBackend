@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import User, { IUser } from '../models/user';
 import { generateToken } from '../utils/jwtUtils';
-
+import { sendEmail } from '../utils/emailUtilities';
+import { randomBytes, createHash } from 'crypto';
 /**
  * @desc    Register new user
  * @route   POST /api/auth/signup
@@ -158,5 +159,136 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ message: 'Error fetching profile', error });
+  }
+};
+/**
+ * @desc    Forgot password
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    // Validate email
+    if (!email) {
+      res.status(400).json({ message: 'Please provide an email address' });
+      return;
+    }
+
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      res.status(200).json({ 
+        message: 'If an account exists with that email, a password reset link has been sent' 
+      });
+      return;
+    }
+
+    // Generate reset token
+    const resetToken = randomBytes(32).toString('hex');
+
+    // Hash token and set to resetPasswordToken field
+    user.resetPasswordToken = createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    // Set expire time (10 minutes)
+    user.resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000);
+
+    await user.save();
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+
+    // Email message
+    const message = `You are receiving this email because you (or someone else) has requested a password reset for your account.\n\n
+Please click on the following link to reset your password:\n\n
+${resetUrl}\n\n
+This link will expire in 10 minutes.\n\n
+If you did not request this, please ignore this email and your password will remain unchanged.`;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Password Reset Request',
+        message,
+      });
+
+      res.status(200).json({ 
+        message: 'If an account exists with that email, a password reset link has been sent' 
+      });
+    } catch (emailError) {
+      console.error('Email send error:', emailError);
+      
+      // Clear reset token fields if email fails
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+
+      res.status(500).json({ message: 'Email could not be sent. Please try again later.' });
+    }
+  } catch (error: any) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Error processing request', error: error.message });
+  }
+};
+
+/**
+ * @desc    Reset password
+ * @route   POST /api/auth/reset-password/:token
+ * @access  Public
+ */
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { password } = req.body;
+    const { token } = req.params;
+
+    // Validate password
+    if (!password || password.length < 6) {
+      res.status(400).json({ message: 'Password must be at least 6 characters long' });
+      return;
+    }
+
+    // Hash token to compare with stored token
+    const resetPasswordToken = createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Find user with valid token that hasn't expired
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      res.status(400).json({ message: 'Invalid or expired reset token' });
+      return;
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    // Clear reset token fields
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    // Generate new JWT token
+    const authToken = generateToken(user._id.toString());
+
+    res.status(200).json({
+      message: 'Password reset successful',
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      token: authToken,
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Error resetting password', error: error.message });
   }
 };

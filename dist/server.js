@@ -91,6 +91,7 @@ try {
     const budgetRoutes = require('./routes/budgetRoutes').default;
     const notificationRoutes = require('./routes/notificationRoutes').default;
     const aiChatRoutes = require('./routes/aiChatRoutes').default;
+    const chatRoutes = require('./routes/chat.routes').default;
     console.log("✅ Routes imported");
     // ============================================
     // BASIC ROUTES
@@ -131,6 +132,8 @@ try {
     app.use('/api/notifications', notificationRoutes);
     console.log("   ✓ /api/notifications");
     app.use('/api/chat', aiChatRoutes);
+    console.log("   ✓ /api/chat");
+    app.use('/api', chatRoutes);
     console.log("   ✓ /api/chat");
     console.log("\n✅ All routes mounted successfully!\n");
 }
